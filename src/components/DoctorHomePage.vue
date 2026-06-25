@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { Calendar, Document, FirstAidKit, Clock, User } from '@element-plus/icons-vue'
-import { getAppointmentList } from '@/api/appointment'
+import { getAppointmentList, completeAppointment } from '@/api/appointment'
 import { getReportList, generateReport, batchCreateReportItems } from '@/api/report'
 import { getPackageDetail } from '@/api/package'
-import type { ExamItem } from '@/types'
+import { getPatientDetail } from '@/api/patient'
+import type { ExamItem, Patient } from '@/types'
 import { useUserStore } from '@/stores/user'
 import type { Appointment, Report } from '@/types'
 
@@ -33,6 +34,8 @@ const reportForm = ref({
 const detailVisible = ref(false)
 const detailLoading = ref(false)
 const appointmentDetail = ref<Appointment | null>(null)
+const patientDetail = ref<Patient | null>(null)
+const patientLoading = ref(false)
 
 async function loadAppointments() {
   loading.value = true
@@ -59,6 +62,20 @@ async function loadReports() {
 // 判断某个预约是否已有报告
 function hasReport(appointmentId: number) {
   return reports.value.some(r => r.appointmentId === appointmentId)
+}
+
+const completing = ref<number | null>(null)
+
+async function handleComplete(appointment: Appointment) {
+  completing.value = appointment.id
+  try {
+    await completeAppointment(appointment.id)
+    await loadAppointments()
+  } catch (err: any) {
+    alert('标记完成失败: ' + err.message)
+  } finally {
+    completing.value = null
+  }
 }
 
 function getReportByAppointment(appointmentId: number): Report | undefined {
@@ -139,9 +156,21 @@ async function submitGenerateReport() {
   }
 }
 
-function openDetail(appointment: Appointment) {
+async function openDetail(appointment: Appointment) {
   appointmentDetail.value = appointment
+  patientDetail.value = null
   detailVisible.value = true
+
+  // 加载患者档案
+  patientLoading.value = true
+  try {
+    const patient = await getPatientDetail(appointment.userId)
+    patientDetail.value = patient
+  } catch (err: any) {
+    console.error('加载患者档案失败:', err.message)
+  } finally {
+    patientLoading.value = false
+  }
 }
 
 function getStatusType(status: number) {
@@ -272,7 +301,16 @@ onMounted(() => {
           <div class="appointment-actions">
             <el-button size="small" @click="openDetail(item)">查看详情</el-button>
             <el-button
-              v-if="item.status === 3 && !hasReport(item.id)"
+              v-if="item.status === 1"
+              size="small"
+              type="warning"
+              :loading="completing === item.id"
+              @click="handleComplete(item)"
+            >
+              标记完成
+            </el-button>
+            <el-button
+              v-else-if="item.status === 3 && !hasReport(item.id)"
               size="small"
               type="primary"
               @click="openGenerateDialog(item)"
@@ -295,35 +333,84 @@ onMounted(() => {
     <!-- 预约详情弹窗 -->
     <el-dialog v-model="detailVisible" title="预约详情" width="85%" align-center>
       <div v-if="appointmentDetail" class="detail-content">
-        <div class="detail-row">
-          <span class="detail-label">预约编号</span>
-          <span class="detail-value">#{{ appointmentDetail.id }}</span>
+        <!-- 患者档案 -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">患者档案</h4>
+
+          <div v-if="patientLoading" class="patient-loading">
+            <el-icon class="is-loading" :size="18"><Clock /></el-icon>
+            <span>加载患者档案...</span>
+          </div>
+
+          <div v-else-if="patientDetail" class="patient-info">
+            <div class="detail-row">
+              <span class="detail-label">姓名</span>
+              <span class="detail-value">{{ patientDetail.name }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">性别</span>
+              <span class="detail-value">{{ patientDetail.gender === 1 ? '男' : patientDetail.gender === 0 ? '女' : '未知' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">出生日期</span>
+              <span class="detail-value">{{ patientDetail.birthday || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">身份证号</span>
+              <span class="detail-value">{{ patientDetail.idCard || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">地址</span>
+              <span class="detail-value">{{ patientDetail.address || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">紧急联系人</span>
+              <span class="detail-value">{{ patientDetail.emergencyContact || '-' }}</span>
+            </div>
+            <div class="detail-row">
+              <span class="detail-label">紧急电话</span>
+              <span class="detail-value">{{ patientDetail.emergencyPhone || '-' }}</span>
+            </div>
+          </div>
+
+          <div v-else class="patient-empty">
+            <span>未获取到患者档案</span>
+          </div>
         </div>
-        <div class="detail-row">
-          <span class="detail-label">患者ID</span>
-          <span class="detail-value">{{ appointmentDetail.userId }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">预约时间</span>
-          <span class="detail-value">{{ formatDateTime(appointmentDetail.appointmentDate, appointmentDetail.timeSlot) }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">套餐ID</span>
-          <span class="detail-value">{{ appointmentDetail.packageId }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">机构ID</span>
-          <span class="detail-value">{{ appointmentDetail.institutionId || '-' }}</span>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">状态</span>
-          <el-tag :type="getStatusType(appointmentDetail.status)" size="small">
-            {{ getStatusLabel(appointmentDetail.status) }}
-          </el-tag>
-        </div>
-        <div class="detail-row">
-          <span class="detail-label">备注</span>
-          <span class="detail-value">{{ appointmentDetail.remark || '无' }}</span>
+
+        <!-- 预约信息 -->
+        <div class="detail-section">
+          <h4 class="detail-section-title">预约信息</h4>
+          <div class="detail-row">
+            <span class="detail-label">预约编号</span>
+            <span class="detail-value">#{{ appointmentDetail.id }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">患者ID</span>
+            <span class="detail-value">{{ appointmentDetail.userId }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">预约时间</span>
+            <span class="detail-value">{{ formatDateTime(appointmentDetail.appointmentDate, appointmentDetail.timeSlot) }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">套餐ID</span>
+            <span class="detail-value">{{ appointmentDetail.packageId }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">机构ID</span>
+            <span class="detail-value">{{ appointmentDetail.institutionId || '-' }}</span>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">状态</span>
+            <el-tag :type="getStatusType(appointmentDetail.status)" size="small">
+              {{ getStatusLabel(appointmentDetail.status) }}
+            </el-tag>
+          </div>
+          <div class="detail-row">
+            <span class="detail-label">备注</span>
+            <span class="detail-value">{{ appointmentDetail.remark || '无' }}</span>
+          </div>
         </div>
       </div>
     </el-dialog>
@@ -693,5 +780,39 @@ onMounted(() => {
 
 .item-input-row:last-child {
   margin-bottom: 0;
+}
+
+.detail-section {
+  margin-bottom: 20px;
+}
+
+.detail-section:last-child {
+  margin-bottom: 0;
+}
+
+.detail-section-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0 0 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #f3f4f6;
+}
+
+.patient-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 0;
+  color: #9ca3af;
+  font-size: 13px;
+}
+
+.patient-empty {
+  text-align: center;
+  padding: 16px 0;
+  color: #9ca3af;
+  font-size: 13px;
 }
 </style>

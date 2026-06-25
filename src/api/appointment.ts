@@ -39,3 +39,9 @@ export function cancelAppointment(id: number) {
   return request.put<ApiResponse<void>>(`/api/exam/appointments/${id}/cancel`)
     .then((res: AxiosResponse<ApiResponse<void>>) => res.data.data)
 }
+
+// 标记体检完成
+export function completeAppointment(id: number) {
+  return request.put<ApiResponse<void>>(`/api/exam/appointments/${id}/complete`)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data.data)
+}

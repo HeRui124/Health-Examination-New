@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Calendar, Document, SwitchButton } from '@element-plus/icons-vue'
+import { Calendar, Document, SwitchButton, User, Phone, Location, UserFilled } from '@element-plus/icons-vue'
 import { getAppointmentList, cancelAppointment } from '@/api/appointment'
 import { getReportList, getReportDetail } from '@/api/report'
+import { getPatientDetail, updatePatientDetail } from '@/api/patient'
 import { useUserStore } from '@/stores/user'
-import type { Appointment, Report, AppointmentStatus } from '@/types'
+import type { Appointment, Report, AppointmentStatus, Patient } from '@/types'
 
 const userStore = useUserStore()
 
@@ -20,6 +21,66 @@ const user = computed(() => ({
   appointments: appointmentsCount.value,
   points: 128,
 }))
+
+// 患者档案
+const patientDetail = ref<Patient | null>(null)
+const patientLoading = ref(false)
+const editDialogVisible = ref(false)
+const saving = ref(false)
+const editForm = ref<Partial<Patient>>({})
+
+async function loadPatientProfile() {
+  if (!userStore.userId) return
+  patientLoading.value = true
+  try {
+    const data = await getPatientDetail(userStore.userId)
+    patientDetail.value = data
+  } catch (err: any) {
+    console.error('加载患者档案失败:', err.message)
+  } finally {
+    patientLoading.value = false
+  }
+}
+
+function enterEditMode() {
+  if (!patientDetail.value) return
+  editForm.value = {
+    name: patientDetail.value.name,
+    gender: patientDetail.value.gender,
+    birthday: patientDetail.value.birthday,
+    idCard: patientDetail.value.idCard,
+    address: patientDetail.value.address,
+    emergencyContact: patientDetail.value.emergencyContact,
+    emergencyPhone: patientDetail.value.emergencyPhone,
+  }
+  editDialogVisible.value = true
+}
+
+function cancelEdit() {
+  editDialogVisible.value = false
+  editForm.value = {}
+}
+
+async function saveEdit() {
+  if (!userStore.userId) return
+  saving.value = true
+  try {
+    const updated = await updatePatientDetail(userStore.userId, editForm.value)
+    patientDetail.value = updated
+    editDialogVisible.value = false
+    alert('档案更新成功')
+  } catch (err: any) {
+    alert('更新失败: ' + err.message)
+  } finally {
+    saving.value = false
+  }
+}
+
+function genderLabel(gender?: number) {
+  if (gender === 0) return '女'
+  if (gender === 1) return '男'
+  return '—'
+}
 
 // 预约列表
 const appointments = ref<Appointment[]>([])
@@ -56,6 +117,7 @@ async function loadReports() {
 onMounted(() => {
   loadAppointments()
   loadReports()
+  loadPatientProfile()
 })
 
 const cancelDialogVisible = ref(false)
@@ -176,6 +238,75 @@ defineExpose({ addNewAppointment })
       </div>
     </div>
 
+    <!-- Patient Profile -->
+    <div class="menu-section">
+      <div class="section-header">
+        <h3 class="section-title">我的档案</h3>
+        <el-button v-if="patientDetail" link type="primary" size="small" @click="enterEditMode">
+          编辑
+        </el-button>
+      </div>
+      <div class="menu-group">
+        <div v-if="patientLoading" class="menu-loading">
+          <el-skeleton :rows="3" animated />
+        </div>
+        <template v-else-if="patientDetail">
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><User /></el-icon>
+              <span class="menu-label">姓名</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.name || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><UserFilled /></el-icon>
+              <span class="menu-label">性别</span>
+            </div>
+            <span class="menu-value">{{ genderLabel(patientDetail.gender) }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Calendar /></el-icon>
+              <span class="menu-label">出生日期</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.birthday || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Document /></el-icon>
+              <span class="menu-label">身份证号</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.idCard || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Location /></el-icon>
+              <span class="menu-label">居住地址</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.address || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><UserFilled /></el-icon>
+              <span class="menu-label">紧急联系人</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.emergencyContact || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Phone /></el-icon>
+              <span class="menu-label">紧急联系人电话</span>
+            </div>
+            <span class="menu-value">{{ patientDetail.emergencyPhone || '—' }}</span>
+          </div>
+        </template>
+        <div v-else class="menu-empty">
+          未获取到档案信息
+        </div>
+      </div>
+    </div>
+
     <!-- Appointments -->
     <div class="appointments-section">
       <div class="section-header">
@@ -267,6 +398,53 @@ defineExpose({ addNewAppointment })
       <div v-else class="report-loading">
         <p>加载失败</p>
       </div>
+    </el-dialog>
+
+    <!-- Edit Profile Dialog -->
+    <el-dialog
+      v-model="editDialogVisible"
+      title="编辑档案"
+      width="85%"
+      align-center
+    >
+      <el-form label-position="top" size="default">
+        <el-form-item label="姓名">
+          <el-input v-model="editForm.name" placeholder="请输入姓名" />
+        </el-form-item>
+        <el-form-item label="性别">
+          <el-radio-group v-model="editForm.gender">
+            <el-radio :label="1">男</el-radio>
+            <el-radio :label="0">女</el-radio>
+          </el-radio-group>
+        </el-form-item>
+        <el-form-item label="出生日期">
+          <el-date-picker
+            v-model="editForm.birthday"
+            type="date"
+            placeholder="选择日期"
+            value-format="YYYY-MM-DD"
+            style="width: 100%"
+          />
+        </el-form-item>
+        <el-form-item label="身份证号">
+          <el-input v-model="editForm.idCard" placeholder="请输入身份证号" />
+        </el-form-item>
+        <el-form-item label="居住地址">
+          <el-input v-model="editForm.address" placeholder="请输入居住地址" />
+        </el-form-item>
+        <el-form-item label="紧急联系人">
+          <el-input v-model="editForm.emergencyContact" placeholder="请输入紧急联系人姓名" />
+        </el-form-item>
+        <el-form-item label="紧急联系人电话">
+          <el-input v-model="editForm.emergencyPhone" placeholder="请输入紧急联系人电话" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="cancelEdit">取消</el-button>
+          <el-button type="primary" :loading="saving" @click="saveEdit">保存</el-button>
+        </div>
+      </template>
     </el-dialog>
   </div>
 </template>
@@ -474,5 +652,57 @@ defineExpose({ addNewAppointment })
   color: #1f2937;
   margin: 0;
   line-height: 1.6;
+}
+
+/* 患者档案 */
+.menu-section {
+  margin-top: 24px;
+  padding: 0 20px;
+}
+
+.menu-group {
+  background: white;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid #f9fafb;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.menu-label {
+  font-size: 14px;
+  color: #374151;
+}
+
+.menu-value {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.menu-loading {
+  padding: 16px;
+}
+
+.menu-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
 }
 </style>

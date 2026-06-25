@@ -1,9 +1,31 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { UserFilled, FirstAidKit, DocumentChecked, SwitchButton } from '@element-plus/icons-vue'
+import { computed, ref, onMounted } from 'vue'
+import { UserFilled, FirstAidKit, DocumentChecked, SwitchButton, OfficeBuilding, Medal, Star, Document } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { getDoctorDetail } from '@/api/doctor'
+import type { Doctor } from '@/types'
 
 const userStore = useUserStore()
+
+const doctorDetail = ref<Doctor | null>(null)
+const loading = ref(false)
+
+async function loadDoctorProfile() {
+  if (!userStore.userId) return
+  loading.value = true
+  try {
+    const data = await getDoctorDetail(userStore.userId)
+    doctorDetail.value = data
+  } catch (err: any) {
+    console.error('加载医生档案失败:', err.message)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  loadDoctorProfile()
+})
 
 function handleLogout() {
   userStore.logout()
@@ -47,7 +69,49 @@ const user = computed(() => ({
       </div>
     </div>
 
-    <!-- Menu List -->
+    <!-- Doctor Profile -->
+    <div class="menu-section">
+      <div class="menu-group">
+        <div v-if="loading" class="menu-loading">
+          <el-skeleton :rows="3" animated />
+        </div>
+        <template v-else-if="doctorDetail">
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><OfficeBuilding /></el-icon>
+              <span class="menu-label">所属科室</span>
+            </div>
+            <span class="menu-value">{{ doctorDetail.department || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Medal /></el-icon>
+              <span class="menu-label">职称</span>
+            </div>
+            <span class="menu-value">{{ doctorDetail.title || '—' }}</span>
+          </div>
+          <div class="menu-item">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Star /></el-icon>
+              <span class="menu-label">专长领域</span>
+            </div>
+            <span class="menu-value">{{ doctorDetail.specialty || '—' }}</span>
+          </div>
+          <div class="menu-item menu-item-block">
+            <div class="menu-left">
+              <el-icon :size="18" color="#0d9488"><Document /></el-icon>
+              <span class="menu-label">个人简介</span>
+            </div>
+            <p class="intro-text">{{ doctorDetail.introduction || '暂无简介' }}</p>
+          </div>
+        </template>
+        <div v-else class="menu-empty">
+          未获取到医生档案
+        </div>
+      </div>
+    </div>
+
+    <!-- Basic Info -->
     <div class="menu-section">
       <div class="menu-group">
         <div class="menu-item">
@@ -195,6 +259,30 @@ const user = computed(() => ({
 
 .menu-item:last-child {
   border-bottom: none;
+}
+
+.menu-item-block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.intro-text {
+  font-size: 13px;
+  color: #6b7280;
+  line-height: 1.6;
+  margin: 0;
+}
+
+.menu-loading {
+  padding: 16px;
+}
+
+.menu-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: #9ca3af;
 }
 
 .menu-left {

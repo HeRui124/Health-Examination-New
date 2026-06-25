@@ -36,3 +36,24 @@ export function batchCreateReportItems(reportId: number, items: Omit<ReportItem,
   return request.post<ApiResponse<void>>(`/api/report/${reportId}/items/batch`, items)
     .then((res: AxiosResponse<ApiResponse<void>>) => res.data.data)
 }
+
+// 修改报告（摘要/结论）
+export function updateReport(id: number, data: {
+  summary?: string
+  conclusion?: string
+}) {
+  return request.put<ApiResponse<void>>(`/api/report/${id}`, data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data.data)
+}
+
+// 修改检查项结果
+export function updateReportItem(reportId: number, itemId: number, data: {
+  examItemId?: number
+  examItemName?: string
+  result?: string
+  referenceRange?: string
+  abnormalFlag?: number
+}) {
+  return request.put<ApiResponse<void>>(`/api/report/${reportId}/items/${itemId}`, data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data.data)
+}

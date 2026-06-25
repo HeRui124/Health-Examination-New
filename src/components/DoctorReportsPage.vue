@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { Document, Clock, FirstAidKit, Warning } from '@element-plus/icons-vue'
-import { getReportList, getReportDetail, getReportItemsAll } from '@/api/report'
+import { Document, Clock, FirstAidKit, Warning, Edit } from '@element-plus/icons-vue'
+import { getReportList, getReportDetail, getReportItemsAll, updateReport, updateReportItem } from '@/api/report'
 import type { Report, ReportItem } from '@/types'
 
 const reports = ref<Report[]>([])
@@ -15,6 +15,12 @@ const detailVisible = ref(false)
 const detailLoading = ref(false)
 const reportDetail = ref<Report | null>(null)
 const reportItems = ref<ReportItem[]>([])
+
+// 编辑模式
+const isEditing = ref(false)
+const saveLoading = ref(false)
+const editForm = ref({ summary: '', conclusion: '' })
+const editItems = ref<{ id: number; examItemId?: number; examItemName?: string; result: string; referenceRange: string; abnormalFlag: number }[]>([])
 
 async function loadReports() {
   loading.value = true
@@ -30,6 +36,7 @@ async function loadReports() {
 }
 
 async function openDetail(report: Report) {
+  isEditing.value = false
   detailLoading.value = true
   detailVisible.value = true
   reportDetail.value = null
@@ -69,6 +76,74 @@ function getStatusLabel(status: number) {
 function formatDate(date?: string) {
   if (!date) return '暂未生成'
   return date.replace('T', ' ').slice(0, 16)
+}
+
+function enterEdit() {
+  if (!reportDetail.value) return
+  editForm.value = {
+    summary: reportDetail.value.summary || '',
+    conclusion: reportDetail.value.conclusion || '',
+  }
+  editItems.value = reportItems.value.map(item => ({
+    id: item.id,
+    examItemId: item.examItemId,
+    examItemName: item.examItemName,
+    result: item.result || '',
+    referenceRange: item.referenceRange || '',
+    abnormalFlag: item.abnormalFlag,
+  }))
+  isEditing.value = true
+}
+
+function cancelEdit() {
+  isEditing.value = false
+}
+
+async function saveChanges() {
+  if (!reportDetail.value) return
+  saveLoading.value = true
+  try {
+    // 1. 更新报告摘要/结论
+    const hasReportChanges =
+      editForm.value.summary !== (reportDetail.value.summary || '') ||
+      editForm.value.conclusion !== (reportDetail.value.conclusion || '')
+
+    if (hasReportChanges) {
+      await updateReport(reportDetail.value.id, {
+        summary: editForm.value.summary,
+        conclusion: editForm.value.conclusion,
+      })
+    }
+
+    // 2. 更新有变动的检查项
+    const changedItems = editItems.value.filter((editItem) => {
+      const original = reportItems.value.find(r => r.id === editItem.id)
+      if (!original) return false
+      return (
+        editItem.result !== (original.result || '') ||
+        editItem.referenceRange !== (original.referenceRange || '') ||
+        editItem.abnormalFlag !== original.abnormalFlag
+      )
+    })
+
+    await Promise.all(changedItems.map(item =>
+      updateReportItem(reportDetail.value!.id, item.id, {
+        examItemId: item.examItemId,
+        examItemName: item.examItemName,
+        result: item.result,
+        referenceRange: item.referenceRange || undefined,
+        abnormalFlag: item.abnormalFlag,
+      })
+    ))
+
+    // 3. 重新加载详情并退出编辑模式
+    await openDetail(reportDetail.value)
+    isEditing.value = false
+  } catch (err: any) {
+    alert('保存失败: ' + err.message)
+  } finally {
+    saveLoading.value = false
+  }
 }
 
 onMounted(() => {
@@ -148,6 +223,22 @@ onMounted(() => {
         <span>加载中...</span>
       </div>
       <div v-else-if="reportDetail" class="detail-content">
+        <!-- 操作栏 -->
+        <div class="detail-actions">
+          <template v-if="!isEditing">
+            <el-button size="small" @click="enterEdit">
+              <el-icon :size="12"><Edit /></el-icon>
+              编辑
+            </el-button>
+          </template>
+          <template v-else>
+            <el-button size="small" @click="cancelEdit">取消</el-button>
+            <el-button size="small" type="primary" :loading="saveLoading" @click="saveChanges">
+              保存
+            </el-button>
+          </template>
+        </div>
+
         <div class="detail-section">
           <h4 class="detail-section-title">基本信息</h4>
           <div class="detail-row">
@@ -174,43 +265,109 @@ onMounted(() => {
           </div>
         </div>
 
+        <!-- 检查摘要 -->
         <div class="detail-section">
           <h4 class="detail-section-title">检查摘要</h4>
-          <p class="detail-text">{{ reportDetail.summary || '暂无' }}</p>
+          <template v-if="!isEditing">
+            <p class="detail-text">{{ reportDetail.summary || '暂无' }}</p>
+          </template>
+          <template v-else>
+            <el-input
+              v-model="editForm.summary"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入检查摘要"
+            />
+          </template>
         </div>
 
+        <!-- 总检结论 -->
         <div class="detail-section">
           <h4 class="detail-section-title">总检结论</h4>
-          <p class="detail-text">{{ reportDetail.conclusion || '暂无' }}</p>
+          <template v-if="!isEditing">
+            <p class="detail-text">{{ reportDetail.conclusion || '暂无' }}</p>
+          </template>
+          <template v-else>
+            <el-input
+              v-model="editForm.conclusion"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入总检结论"
+            />
+          </template>
         </div>
 
+        <!-- 检查项目明细 -->
         <div v-if="reportItems.length > 0" class="detail-section">
           <h4 class="detail-section-title">检查项目明细 ({{ reportItems.length }}项)</h4>
-          <div class="item-list">
-            <div
-              v-for="item in reportItems"
-              :key="item.id"
-              class="item-card"
-              :class="{ abnormal: item.abnormalFlag === 1 }"
-            >
-              <div class="item-header">
-                <span class="item-name">{{ item.examItemName }}</span>
-                <el-tag v-if="item.abnormalFlag === 1" type="danger" size="small">
-                  <el-icon :size="10"><Warning /></el-icon>
-                  异常
-                </el-tag>
-                <el-tag v-else type="success" size="small">正常</el-tag>
-              </div>
-              <div class="item-result">
-                <span class="result-label">结果</span>
-                <span class="result-value">{{ item.result }}</span>
-              </div>
-              <div class="item-result">
-                <span class="result-label">参考范围</span>
-                <span class="result-value">{{ item.referenceRange || '-' }}</span>
+
+          <!-- 查看模式 -->
+          <template v-if="!isEditing">
+            <div class="item-list">
+              <div
+                v-for="item in reportItems"
+                :key="item.id"
+                class="item-card"
+                :class="{ abnormal: item.abnormalFlag === 1 }"
+              >
+                <div class="item-header">
+                  <span class="item-name">{{ item.examItemName }}</span>
+                  <el-tag v-if="item.abnormalFlag === 1" type="danger" size="small">
+                    <el-icon :size="10"><Warning /></el-icon>
+                    异常
+                  </el-tag>
+                  <el-tag v-else type="success" size="small">正常</el-tag>
+                </div>
+                <div class="item-result">
+                  <span class="result-label">结果</span>
+                  <span class="result-value">{{ item.result }}</span>
+                </div>
+                <div class="item-result">
+                  <span class="result-label">参考范围</span>
+                  <span class="result-value">{{ item.referenceRange || '-' }}</span>
+                </div>
               </div>
             </div>
-          </div>
+          </template>
+
+          <!-- 编辑模式 -->
+          <template v-else>
+            <div class="item-edit-list">
+              <div
+                v-for="item in editItems"
+                :key="item.id"
+                class="item-edit-card"
+                :class="{ abnormal: item.abnormalFlag === 1 }"
+              >
+                <div class="item-edit-header">
+                  <span class="item-edit-name">{{ item.examItemName }}</span>
+                  <el-switch
+                    v-model="item.abnormalFlag"
+                    :active-value="1"
+                    :inactive-value="0"
+                    size="small"
+                    inline-prompt
+                    active-text="异常"
+                    inactive-text="正常"
+                  />
+                </div>
+                <div class="item-edit-row">
+                  <el-input
+                    v-model="item.result"
+                    size="small"
+                    placeholder="检查结果"
+                  />
+                </div>
+                <div class="item-edit-row">
+                  <el-input
+                    v-model="item.referenceRange"
+                    size="small"
+                    placeholder="参考范围"
+                  />
+                </div>
+              </div>
+            </div>
+          </template>
         </div>
       </div>
       <div v-else class="detail-loading">
@@ -457,5 +614,54 @@ onMounted(() => {
 .result-value {
   color: #374151;
   font-weight: 500;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.item-edit-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.item-edit-card {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.item-edit-card.abnormal {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.item-edit-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.item-edit-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.item-edit-row {
+  margin-bottom: 6px;
+}
+
+.item-edit-row:last-child {
+  margin-bottom: 0;
 }
 </style>

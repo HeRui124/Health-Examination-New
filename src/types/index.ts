@@ -45,6 +45,28 @@ export interface LoginResult {
   expiresIn: number
 }
 
+export interface Patient {
+  id: number
+  userId: number
+  name: string
+  gender: number
+  birthday?: string
+  idCard?: string
+  address?: string
+  emergencyContact?: string
+  emergencyPhone?: string
+}
+
+export interface Doctor {
+  id: number
+  userId: number
+  packageId?: number
+  department?: string
+  title?: string
+  specialty?: string
+  introduction?: string
+}
+
 // ==================== 套餐相关 ====================
 
 export interface ExamPackage {

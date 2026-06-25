@@ -1,11 +1,14 @@
 <script setup lang="ts">
 import { ref, reactive } from 'vue'
 import { User, Lock, FirstAidKit } from '@element-plus/icons-vue'
-import { login } from '@/api/auth'
+import { login, register } from '@/api/auth'
 import { useUserStore } from '@/stores/user'
 import { parseJwt } from '@/utils/jwt'
 
 const userStore = useUserStore()
+
+type PageMode = 'login' | 'register'
+const pageMode = ref<PageMode>('login')
 
 type LoginMode = 'patient' | 'doctor'
 const loginMode = ref<LoginMode>('patient')
@@ -13,6 +16,15 @@ const loginMode = ref<LoginMode>('patient')
 const loginForm = reactive({
   username: '',
   password: '',
+})
+
+const registerForm = reactive({
+  username: '',
+  password: '',
+  confirmPassword: '',
+  realName: '',
+  phone: '',
+  email: '',
 })
 
 const loading = ref(false)
@@ -48,6 +60,55 @@ async function handleLogin() {
   }
 }
 
+async function handleRegister() {
+  if (!registerForm.username.trim()) {
+    errorMsg.value = '请输入用户名'
+    return
+  }
+  if (!registerForm.password) {
+    errorMsg.value = '请输入密码'
+    return
+  }
+  if (registerForm.password !== registerForm.confirmPassword) {
+    errorMsg.value = '两次输入的密码不一致'
+    return
+  }
+  if (!registerForm.realName.trim()) {
+    errorMsg.value = '请输入真实姓名'
+    return
+  }
+  if (registerForm.phone && !/^1[3-9]\d{9}$/.test(registerForm.phone)) {
+    errorMsg.value = '手机号格式不正确'
+    return
+  }
+  errorMsg.value = ''
+  loading.value = true
+  try {
+    await register({
+      username: registerForm.username.trim(),
+      password: registerForm.password,
+      realName: registerForm.realName.trim(),
+      phone: registerForm.phone || undefined,
+      email: registerForm.email || undefined,
+      role: 'PATIENT',
+    })
+    // 注册成功，清空表单并切回登录
+    registerForm.username = ''
+    registerForm.password = ''
+    registerForm.confirmPassword = ''
+    registerForm.realName = ''
+    registerForm.phone = ''
+    registerForm.email = ''
+    pageMode.value = 'login'
+    errorMsg.value = ''
+    alert('注册成功，请登录')
+  } catch (err: any) {
+    errorMsg.value = err.message || '注册失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
 const emit = defineEmits<{
   loginSuccess: []
 }>()
@@ -56,6 +117,16 @@ function switchMode(mode: LoginMode) {
   loginMode.value = mode
   loginForm.username = ''
   loginForm.password = ''
+  errorMsg.value = ''
+}
+
+function switchToRegister() {
+  pageMode.value = 'register'
+  errorMsg.value = ''
+}
+
+function switchToLogin() {
+  pageMode.value = 'login'
   errorMsg.value = ''
 }
 
@@ -82,67 +153,157 @@ function fillTestAccount() {
     </div>
 
     <div class="login-form">
-      <div class="mode-switch">
-        <div
-          class="mode-tab"
-          :class="{ active: loginMode === 'patient' }"
-          @click="switchMode('patient')"
-        >
-          患者登录
+      <!-- 登录模式 -->
+      <template v-if="pageMode === 'login'">
+        <div class="mode-switch">
+          <div
+            class="mode-tab"
+            :class="{ active: loginMode === 'patient' }"
+            @click="switchMode('patient')"
+          >
+            患者登录
+          </div>
+          <div
+            class="mode-tab"
+            :class="{ active: loginMode === 'doctor' }"
+            @click="switchMode('doctor')"
+          >
+            医生登录
+          </div>
         </div>
-        <div
-          class="mode-tab"
-          :class="{ active: loginMode === 'doctor' }"
-          @click="switchMode('doctor')"
+
+        <el-input
+          v-model="loginForm.username"
+          placeholder="用户名"
+          :prefix-icon="User"
+          size="large"
+          class="form-input"
+          @keyup.enter="handleLogin"
+        />
+
+        <el-input
+          v-model="loginForm.password"
+          type="password"
+          placeholder="密码"
+          :prefix-icon="Lock"
+          size="large"
+          show-password
+          class="form-input"
+          @keyup.enter="handleLogin"
+        />
+
+        <el-alert
+          v-if="errorMsg"
+          :title="errorMsg"
+          type="error"
+          :closable="false"
+          show-icon
+          class="error-alert"
+        />
+
+        <el-button
+          type="primary"
+          size="large"
+          class="login-btn"
+          :loading="loading"
+          @click="handleLogin"
         >
-          医生登录
-        </div>
-      </div>
-
-      <el-input
-        v-model="loginForm.username"
-        placeholder="用户名"
-        :prefix-icon="User"
-        size="large"
-        class="form-input"
-        @keyup.enter="handleLogin"
-      />
-
-      <el-input
-        v-model="loginForm.password"
-        type="password"
-        placeholder="密码"
-        :prefix-icon="Lock"
-        size="large"
-        show-password
-        class="form-input"
-        @keyup.enter="handleLogin"
-      />
-
-      <el-alert
-        v-if="errorMsg"
-        :title="errorMsg"
-        type="error"
-        :closable="false"
-        show-icon
-        class="error-alert"
-      />
-
-      <el-button
-        type="primary"
-        size="large"
-        class="login-btn"
-        :loading="loading"
-        @click="handleLogin"
-      >
-        登 录
-      </el-button>
-
-      <div class="test-account">
-        <el-button link type="info" size="small" @click="fillTestAccount">
-          填入测试账号
+          登 录
         </el-button>
-      </div>
+
+        <div class="register-link">
+          <span @click="switchToRegister">患者注册</span>
+        </div>
+
+        <div class="test-account">
+          <el-button link type="info" size="small" @click="fillTestAccount">
+            填入测试账号
+          </el-button>
+        </div>
+      </template>
+
+      <!-- 注册模式 -->
+      <template v-else>
+        <div class="mode-header">
+          <h3 class="mode-title">患者注册</h3>
+          <span class="mode-back" @click="switchToLogin">返回登录</span>
+        </div>
+
+        <el-input
+          v-model="registerForm.username"
+          placeholder="用户名"
+          :prefix-icon="User"
+          size="large"
+          class="form-input"
+        />
+
+        <el-input
+          v-model="registerForm.password"
+          type="password"
+          placeholder="密码"
+          :prefix-icon="Lock"
+          size="large"
+          show-password
+          class="form-input"
+        />
+
+        <el-input
+          v-model="registerForm.confirmPassword"
+          type="password"
+          placeholder="确认密码"
+          :prefix-icon="Lock"
+          size="large"
+          show-password
+          class="form-input"
+        />
+
+        <el-input
+          v-model="registerForm.realName"
+          placeholder="真实姓名"
+          :prefix-icon="User"
+          size="large"
+          class="form-input"
+        />
+
+        <el-input
+          v-model="registerForm.phone"
+          placeholder="手机号（选填）"
+          :prefix-icon="User"
+          size="large"
+          class="form-input"
+        />
+
+        <el-input
+          v-model="registerForm.email"
+          placeholder="邮箱（选填）"
+          :prefix-icon="User"
+          size="large"
+          class="form-input"
+        />
+
+        <el-alert
+          v-if="errorMsg"
+          :title="errorMsg"
+          type="error"
+          :closable="false"
+          show-icon
+          class="error-alert"
+        />
+
+        <el-button
+          type="primary"
+          size="large"
+          class="login-btn"
+          :loading="loading"
+          @click="handleRegister"
+        >
+          注 册
+        </el-button>
+
+        <div class="register-link">
+          <span @click="switchToLogin">已有账号？去登录</span>
+        </div>
+      </template>
     </div>
 
     <div class="login-footer">
@@ -262,6 +423,47 @@ function fillTestAccount() {
 .test-account {
   text-align: center;
   margin-top: 12px;
+}
+
+.register-link {
+  text-align: center;
+  margin-top: 12px;
+}
+
+.register-link span {
+  font-size: 12px;
+  color: #0d9488;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.register-link span:hover {
+  color: #0f766e;
+}
+
+.mode-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.mode-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #1f2937;
+  margin: 0;
+}
+
+.mode-back {
+  font-size: 12px;
+  color: #0d9488;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.mode-back:hover {
+  color: #0f766e;
 }
 
 .login-footer {

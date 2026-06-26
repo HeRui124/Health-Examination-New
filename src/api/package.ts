@@ -19,3 +19,25 @@ export function getPackagesByInstitution(institutionId: number) {
   return request.get<ApiResponse<ExamPackage[]>>(`/api/exam/institutions/${institutionId}/packages`)
     .then((res: AxiosResponse<ApiResponse<ExamPackage[]>>) => res.data.data)
 }
+
+// ==================== 套餐管理（管理员） ====================
+
+export function createPackage(data: Partial<ExamPackage>) {
+  return request.post<ApiResponse<void>>('/api/exam/packages', data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}
+
+export function updatePackage(data: Partial<ExamPackage>) {
+  return request.put<ApiResponse<void>>('/api/exam/packages', data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}
+
+export function togglePackageStatus(id: number, status: number) {
+  return request.put<ApiResponse<void>>(`/api/exam/packages/${id}/status?status=${status}`)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}
+
+export function deletePackage(id: number) {
+  return request.delete<ApiResponse<void>>(`/api/exam/packages/${id}`)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}

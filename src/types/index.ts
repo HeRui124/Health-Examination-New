@@ -92,6 +92,12 @@ export interface Institution {
   sortOrder: number
 }
 
+export interface InstitutionPackage {
+  id: number
+  institutionId: number
+  packageId: number
+}
+
 // ==================== 检查项目相关 ====================
 
 export interface ExamItem {

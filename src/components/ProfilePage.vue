@@ -2,10 +2,10 @@
 import { ref, onMounted, computed } from 'vue'
 import { Calendar, Document, SwitchButton, User, Phone, Location, UserFilled } from '@element-plus/icons-vue'
 import { getAppointmentList, cancelAppointment } from '@/api/appointment'
-import { getReportList, getReportDetail } from '@/api/report'
+import { getReportList, getReportDetail, getReportItemsAll } from '@/api/report'
 import { getPatientDetail, updatePatientDetail } from '@/api/patient'
 import { useUserStore } from '@/stores/user'
-import type { Appointment, Report, AppointmentStatus, Patient } from '@/types'
+import type { Appointment, Report, AppointmentStatus, Patient, ReportItem } from '@/types'
 
 const userStore = useUserStore()
 
@@ -148,6 +148,8 @@ async function executeCancel() {
 const reportDetailVisible = ref(false)
 const reportDetail = ref<Report | null>(null)
 const reportDetailLoading = ref(false)
+const reportItems = ref<ReportItem[]>([])
+const reportItemsLoading = ref(false)
 
 async function viewReport(appointmentId: number) {
   // 从已加载的报告列表中匹配
@@ -157,13 +159,22 @@ async function viewReport(appointmentId: number) {
     return
   }
   reportDetailLoading.value = true
+  reportItemsLoading.value = true
   reportDetailVisible.value = true
+  reportItems.value = []
   try {
     reportDetail.value = await getReportDetail(matched.id)
   } catch {
     reportDetail.value = null
   } finally {
     reportDetailLoading.value = false
+  }
+  try {
+    reportItems.value = await getReportItemsAll(matched.id)
+  } catch {
+    reportItems.value = []
+  } finally {
+    reportItemsLoading.value = false
   }
 }
 
@@ -394,6 +405,32 @@ defineExpose({ addNewAppointment })
         <p class="report-value">{{ reportDetail.conclusion || '暂无' }}</p>
         <p class="report-label">生成时间</p>
         <p class="report-value">{{ reportDetail.generateTime || '暂未生成' }}</p>
+
+        <p class="report-label">检查项目明细</p>
+        <div v-if="reportItemsLoading" class="report-loading">
+          <span>加载检查项...</span>
+        </div>
+        <div v-else-if="reportItems.length === 0" class="report-value" style="color: #9ca3af;">
+          暂无检查项目明细
+        </div>
+        <div v-else class="report-item-list">
+          <div
+            v-for="item in reportItems"
+            :key="item.id"
+            class="report-item"
+            :class="{ abnormal: item.abnormalFlag === 1 }"
+          >
+            <div class="report-item-header">
+              <span class="report-item-name">{{ item.examItemName }}</span>
+              <el-tag v-if="item.abnormalFlag === 1" type="danger" size="small">异常</el-tag>
+              <el-tag v-else type="success" size="small">正常</el-tag>
+            </div>
+            <div class="report-item-body">
+              <span class="report-item-result">结果：{{ item.result || '—' }}</span>
+              <span class="report-item-ref">参考范围：{{ item.referenceRange || '—' }}</span>
+            </div>
+          </div>
+        </div>
       </div>
       <div v-else class="report-loading">
         <p>加载失败</p>
@@ -652,6 +689,50 @@ defineExpose({ addNewAppointment })
   color: #1f2937;
   margin: 0;
   line-height: 1.6;
+}
+
+.report-item-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.report-item {
+  background: #f9fafb;
+  border-radius: 10px;
+  padding: 12px;
+  border: 1px solid #f3f4f6;
+}
+
+.report-item.abnormal {
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.report-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.report-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.report-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.report-item-result,
+.report-item-ref {
+  font-size: 12px;
+  color: #6b7280;
 }
 
 /* 患者档案 */

@@ -76,7 +76,7 @@ async function loadData() {
   // 套餐列表
   try {
     const pkgRes = await getPackageList(1, 10)
-    packages.value = pkgRes.records
+    packages.value = pkgRes.records.filter(pkg => pkg.status === 1)
   } catch (err: any) {
     console.warn('加载套餐列表失败:', err.message)
     packages.value = []

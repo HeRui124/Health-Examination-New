@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, provide, computed, watch, onMounted } from 'vue'
-import { HomeFilled, DocumentChecked, UserFilled, Iphone, ChatDotRound, Lightning, FirstAidKit, Document, Notebook } from '@element-plus/icons-vue'
+import { HomeFilled, DocumentChecked, UserFilled, Iphone, ChatDotRound, Lightning, FirstAidKit, Document, Notebook, User, Box, OfficeBuilding } from '@element-plus/icons-vue'
 import { useUserStore } from './stores/user'
 import HomePage from './components/HomePage.vue'
 import BookingPage from './components/BookingPage.vue'
@@ -9,10 +9,14 @@ import LoginPage from './components/LoginPage.vue'
 import DoctorHomePage from './components/DoctorHomePage.vue'
 import DoctorReportsPage from './components/DoctorReportsPage.vue'
 import DoctorProfilePage from './components/DoctorProfilePage.vue'
+import AdminUsersPage from './components/AdminUsersPage.vue'
+import AdminPackagesPage from './components/AdminPackagesPage.vue'
+import AdminInstitutionsPage from './components/AdminInstitutionsPage.vue'
 
 type PatientTab = 'home' | 'booking' | 'profile'
 type DoctorTab = 'workbench' | 'reports' | 'profile'
-type TabType = PatientTab | DoctorTab
+type AdminTab = 'users' | 'packages' | 'institutions'
+type TabType = PatientTab | DoctorTab | AdminTab
 
 const userStore = useUserStore()
 const currentTab = ref<TabType>('home')
@@ -23,10 +27,13 @@ const toastMessage = ref('')
 const isLoggedIn = computed(() => userStore.isLoggedIn)
 const userRole = computed(() => userStore.userRole)
 const isDoctor = computed(() => userRole.value === 'DOCTOR')
+const isAdmin = computed(() => userRole.value === 'ADMIN')
 
 watch(isLoggedIn, (loggedIn) => {
   if (!loggedIn) {
     currentTab.value = 'home'
+  } else if (isAdmin.value) {
+    currentTab.value = 'users'
   } else if (isDoctor.value) {
     currentTab.value = 'workbench'
   } else {
@@ -36,8 +43,12 @@ watch(isLoggedIn, (loggedIn) => {
 
 // 初始化时根据角色设置默认 tab
 onMounted(() => {
-  if (isLoggedIn.value && isDoctor.value) {
-    currentTab.value = 'workbench'
+  if (isLoggedIn.value) {
+    if (isAdmin.value) {
+      currentTab.value = 'users'
+    } else if (isDoctor.value) {
+      currentTab.value = 'workbench'
+    }
   }
 })
 
@@ -87,8 +98,14 @@ provide('showToast', showToast)
       <div class="page-wrapper">
         <LoginPage v-if="!isLoggedIn" @loginSuccess="handleLoginSuccess" />
         <template v-else>
+          <!-- 管理员页面 -->
+          <template v-if="isAdmin">
+            <AdminUsersPage v-show="currentTab === 'users'" />
+            <AdminPackagesPage v-show="currentTab === 'packages'" />
+            <AdminInstitutionsPage v-show="currentTab === 'institutions'" />
+          </template>
           <!-- 患者页面 -->
-          <template v-if="!isDoctor">
+          <template v-else-if="!isDoctor">
             <HomePage v-show="currentTab === 'home'" />
             <BookingPage
               v-show="currentTab === 'booking'"
@@ -107,8 +124,35 @@ provide('showToast', showToast)
 
       <!-- Bottom Tab Bar -->
       <div v-if="isLoggedIn" class="tab-bar">
+        <!-- 管理员导航 -->
+        <template v-if="isAdmin">
+          <div
+            class="tab-item"
+            :class="{ active: currentTab === 'users' }"
+            @click="switchTab('users')"
+          >
+            <el-icon :size="22"><User /></el-icon>
+            <span class="tab-label">用户</span>
+          </div>
+          <div
+            class="tab-item"
+            :class="{ active: currentTab === 'packages' }"
+            @click="switchTab('packages')"
+          >
+            <el-icon :size="22"><Box /></el-icon>
+            <span class="tab-label">套餐</span>
+          </div>
+          <div
+            class="tab-item"
+            :class="{ active: currentTab === 'institutions' }"
+            @click="switchTab('institutions')"
+          >
+            <el-icon :size="22"><OfficeBuilding /></el-icon>
+            <span class="tab-label">机构</span>
+          </div>
+        </template>
         <!-- 患者导航 -->
-        <template v-if="!isDoctor">
+        <template v-else-if="!isDoctor">
           <div
             class="tab-item"
             :class="{ active: currentTab === 'home' }"

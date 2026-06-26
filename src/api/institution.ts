@@ -25,3 +25,20 @@ export function getInstitutionsByAppointmentType(type: string) {
   return request.get<ApiResponse<Institution[]>>(`/api/exam/appointment-types/${type}/institutions`)
     .then((res: AxiosResponse<ApiResponse<Institution[]>>) => res.data.data)
 }
+
+// ==================== 机构管理（管理员） ====================
+
+export function createInstitution(data: Partial<Institution>) {
+  return request.post<ApiResponse<void>>('/api/exam/institutions', data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}
+
+export function updateInstitution(data: Partial<Institution>) {
+  return request.put<ApiResponse<void>>('/api/exam/institutions', data)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}
+
+export function deleteInstitution(id: number) {
+  return request.delete<ApiResponse<void>>(`/api/exam/institutions/${id}`)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}

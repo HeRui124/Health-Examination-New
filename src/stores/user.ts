@@ -51,6 +51,13 @@ export const useUserStore = defineStore('user', () => {
     setUserInfo({ ...DEFAULT_USER })
   }
 
+  function updateUserAvatar(avatarUrl: string) {
+    if (user.value) {
+      user.value = { ...user.value, avatar: avatarUrl }
+      localStorage.setItem('userInfo', JSON.stringify(user.value))
+    }
+  }
+
   function logout() {
     token.value = ''
     user.value = null
@@ -66,6 +73,7 @@ export const useUserStore = defineStore('user', () => {
     userId,
     setToken,
     setUserInfo,
+    updateUserAvatar,
     initMockUser,
     logout,
   }

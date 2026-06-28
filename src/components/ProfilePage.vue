@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { Calendar, Document, SwitchButton, User, Phone, Location, UserFilled } from '@element-plus/icons-vue'
+import { Calendar, Document, SwitchButton, User, Phone, Location, UserFilled, Loading } from '@element-plus/icons-vue'
 import { getAppointmentList, cancelAppointment } from '@/api/appointment'
 import { getReportList, getReportDetail, getReportItemsAll } from '@/api/report'
 import { getPatientDetail, updatePatientDetail } from '@/api/patient'
+import { updateAvatar } from '@/api/auth'
+import { uploadFile } from '@/api/file'
 import { useUserStore } from '@/stores/user'
 import type { Appointment, Report, AppointmentStatus, Patient, ReportItem } from '@/types'
 
@@ -21,6 +23,39 @@ const user = computed(() => ({
   appointments: appointmentsCount.value,
   points: 128,
 }))
+
+const avatarInputRef = ref<HTMLInputElement>()
+const avatarUploading = ref(false)
+
+function triggerAvatarUpload() {
+  avatarInputRef.value?.click()
+}
+
+async function handleAvatarChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // 简单校验：只允许图片
+  if (!file.type.startsWith('image/')) {
+    alert('请选择图片文件')
+    target.value = ''
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const uploadRes = await uploadFile(file)
+    await updateAvatar(uploadRes.fileUrl)
+    userStore.updateUserAvatar(uploadRes.fileUrl)
+    alert('头像更新成功')
+  } catch (err: any) {
+    alert('头像上传失败: ' + err.message)
+  } finally {
+    avatarUploading.value = false
+    target.value = ''
+  }
+}
 
 // 患者档案
 const patientDetail = ref<Patient | null>(null)
@@ -226,7 +261,19 @@ defineExpose({ addNewAppointment })
     <!-- User Info Card -->
     <div class="user-card">
       <div class="user-header">
-        <el-avatar :size="64" :src="user.avatar" class="user-avatar" />
+        <div class="avatar-wrapper" @click="triggerAvatarUpload">
+          <el-avatar :size="64" :src="user.avatar" class="user-avatar" />
+          <div v-if="avatarUploading" class="avatar-mask">
+            <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+          </div>
+        </div>
+        <input
+          ref="avatarInputRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="handleAvatarChange"
+        />
         <div class="user-info">
           <h2 class="user-name">{{ user.name }}</h2>
           <p class="user-phone">{{ user.phone }}</p>
@@ -504,8 +551,27 @@ defineExpose({ addNewAppointment })
   gap: 16px;
 }
 
+.avatar-wrapper {
+  position: relative;
+  cursor: pointer;
+}
+
 .user-avatar {
   border: 4px solid #f0fdfa;
+}
+
+.avatar-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
 }
 
 .user-info {

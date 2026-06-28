@@ -54,3 +54,8 @@ export function deleteUser(id: number) {
   return request.delete<ApiResponse<void>>(`/api/auth/users/${id}`)
     .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
 }
+
+export function updateAvatar(avatarUrl: string) {
+  return request.put<ApiResponse<void>>(`/api/auth/avatar?avatarUrl=${encodeURIComponent(avatarUrl)}`)
+    .then((res: AxiosResponse<ApiResponse<void>>) => res.data)
+}

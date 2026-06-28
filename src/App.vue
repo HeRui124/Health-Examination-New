@@ -12,6 +12,7 @@ import DoctorProfilePage from './components/DoctorProfilePage.vue'
 import AdminUsersPage from './components/AdminUsersPage.vue'
 import AdminPackagesPage from './components/AdminPackagesPage.vue'
 import AdminInstitutionsPage from './components/AdminInstitutionsPage.vue'
+import AIChatWidget from './components/AIChatWidget.vue'
 
 type PatientTab = 'home' | 'booking' | 'profile'
 type DoctorTab = 'workbench' | 'reports' | 'profile'
@@ -213,6 +214,7 @@ provide('showToast', showToast)
           {{ toastMessage }}
         </div>
       </transition>
+      <AIChatWidget v-if="isLoggedIn && !isAdmin && !isDoctor" />
     </div>
   </div>
 </template>

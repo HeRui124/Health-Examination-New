@@ -43,6 +43,13 @@ export interface LoginResult {
   accessToken: string
   refreshToken: string
   expiresIn: number
+  userInfo?: {
+    userId: number
+    username: string
+    realName: string
+    avatar?: string
+    role: string
+  }
 }
 
 export interface Patient {

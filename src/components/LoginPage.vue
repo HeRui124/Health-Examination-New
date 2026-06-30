@@ -43,15 +43,27 @@ async function handleLogin() {
       password: loginForm.password,
     })
     userStore.setToken(res.accessToken)
-    // 尝试从 JWT 中解析用户信息
-    const payload = parseJwt(res.accessToken)
-    userStore.setUserInfo({
-      id: payload?.userId ?? 0,
-      username: payload?.username || loginForm.username.trim(),
-      realName: payload?.username || loginForm.username.trim(),
-      role: (payload?.role as any) || 'PATIENT',
-      status: 1,
-    })
+    // 优先使用后端返回的完整用户信息（含头像）
+    if (res.userInfo) {
+      userStore.setUserInfo({
+        id: res.userInfo.userId,
+        username: res.userInfo.username,
+        realName: res.userInfo.realName,
+        avatar: res.userInfo.avatar,
+        role: (res.userInfo.role as any) || 'PATIENT',
+        status: 1,
+      })
+    } else {
+      // 兼容旧逻辑：从 JWT 解析
+      const payload = parseJwt(res.accessToken)
+      userStore.setUserInfo({
+        id: payload?.userId ?? 0,
+        username: payload?.username || loginForm.username.trim(),
+        realName: payload?.username || loginForm.username.trim(),
+        role: (payload?.role as any) || 'PATIENT',
+        status: 1,
+      })
+    }
     emit('loginSuccess')
   } catch (err: any) {
     errorMsg.value = err.message || '登录失败，请检查用户名和密码'

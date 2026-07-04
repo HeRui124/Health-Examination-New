@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { Star, StarFilled, Clock } from '@element-plus/icons-vue'
 import { getActiveInstitutions, getInstitutionDetail } from '@/api/institution'
 import { getPackageList, getPackageDetail } from '@/api/package'
 import { getDictItemsByType } from '@/api/dict'
+import { useUserStore } from '@/stores/user'
 import type { Institution, ExamPackage, ExamItem, DictItem } from '@/types'
 
 // 机构数据（接口获取）
@@ -47,6 +48,14 @@ async function openPkgDetail(id: number) {
     pkgDetailLoading.value = false
   }
 }
+
+// 获取用户store
+const userStore = useUserStore()
+
+// 用户头像（与个人中心保持一致）
+const userAvatar = computed(() => 
+  userStore.user?.avatar || 'https://modao.cc/agent-py/media/generated_images/2026-06-03/14abbabc406b43ec8a82b7f7edd276b5.jpg'
+)
 
 function renderStars(rating: number) {
   const full = Math.floor(rating)
@@ -117,12 +126,14 @@ function getAreaFromAddress(address?: string) {
     <!-- Header -->
     <div class="header">
       <h1 class="title">体检预约</h1>
-      <el-avatar :size="40" src="https://modao.cc/agent-py/media/generated_images/2026-06-03/77a29bb9007d446b815a98cbb9868450.jpg" class="user-avatar" />
+      <el-avatar :size="40" :src="userAvatar" class="user-avatar" />
     </div>
 
     <!-- Recommended Institutions -->
     <div class="section">
-      <h3 class="section-title">推荐体检机构</h3>
+      <div class="section-header">
+        <h3 class="section-title">推荐体检机构</h3>
+      </div>
       <div v-if="institutions.length" class="institution-list">
         <div v-for="inst in institutions" :key="inst.id" class="institution-card" @click="openInstDetail(inst.id)">
           <div class="institution-image">
@@ -173,7 +184,9 @@ function getAreaFromAddress(address?: string) {
 
     <!-- Popular Packages -->
     <div class="section">
-      <h3 class="section-title">热门体检套餐</h3>
+      <div class="section-header">
+        <h3 class="section-title">热门体检套餐</h3>
+      </div>
       <div v-if="packages.length" class="package-list">
         <div v-for="pkg in packages" :key="pkg.id" class="package-card" @click="openPkgDetail(pkg.id)">
           <div class="package-icon" :style="{ backgroundColor: getPackageStyle(pkg.name).bgColor, color: getPackageStyle(pkg.name).color }">
@@ -266,7 +279,7 @@ function getAreaFromAddress(address?: string) {
 }
 
 .section {
-  margin-top: 24px;
+  margin-top: 16px;
 }
 
 .section-header {
@@ -281,7 +294,7 @@ function getAreaFromAddress(address?: string) {
   font-size: 16px;
   font-weight: 700;
   color: #1f2937;
-  margin: 0 0 0 20px;
+  margin: 0;
 }
 
 .institution-list {

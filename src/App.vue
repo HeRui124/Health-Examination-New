@@ -249,21 +249,40 @@ body {
   display: flex;
   justify-content: center;
   align-items: center;
+  width: 100%;
   min-height: 100vh;
-  padding: 20px;
+  padding: 0;
 }
 
 .mobile-frame {
-  width: 375px;
-  height: 812px;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
   background-color: #f9fafb;
   position: relative;
   overflow: hidden;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-  border-radius: 40px;
-  border: 8px solid #1f2937;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+}
+
+/* 电脑屏幕比例：以高度为基础自适应为手机外框 */
+@media (min-aspect-ratio: 3/4) and (min-height: 600px) {
+  .app-container {
+    padding: 20px;
+  }
+
+  .mobile-frame {
+    --frame-h: clamp(750px, 88vh, 1000px);
+    height: var(--frame-h);
+    width: calc(var(--frame-h) * 375 / 812);
+    flex-shrink: 0;
+    border-radius: 40px;
+    border: 8px solid #1f2937;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  }
 }
 
 .status-bar {

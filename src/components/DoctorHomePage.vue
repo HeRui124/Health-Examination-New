@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Calendar, Document, FirstAidKit, Clock, User } from '@element-plus/icons-vue'
 import { getAppointmentList, completeAppointment } from '@/api/appointment'
 import { getReportList, generateReport, batchCreateReportItems } from '@/api/report'
@@ -17,6 +18,11 @@ const loading = ref(false)
 const page = ref(1)
 const size = ref(10)
 const total = ref(0)
+
+// 存储患者姓名映射 (userId -> name)
+const patientNames = ref<Record<number, string>>({})
+// 存储套餐名称映射 (packageId -> name)
+const packageNames = ref<Record<number, string>>({})
 
 // 报告生成弹窗
 const generateDialogVisible = ref(false)
@@ -36,6 +42,9 @@ const detailLoading = ref(false)
 const appointmentDetail = ref<Appointment | null>(null)
 const patientDetail = ref<Patient | null>(null)
 const patientLoading = ref(false)
+// 详情中的套餐和机构名称
+const detailPackageName = ref<string>('')
+const detailInstitutionName = ref<string>('')
 
 async function loadAppointments() {
   loading.value = true
@@ -43,6 +52,36 @@ async function loadAppointments() {
     const res = await getAppointmentList(page.value, size.value)
     appointments.value = res.records
     total.value = res.total
+    
+    // 收集所有需要加载的ID
+    const userIds = [...new Set(res.records.map(a => a.userId))]
+    const packageIds = [...new Set(res.records.map(a => a.packageId).filter((id): id is number => !!id))]
+    
+    // 并行加载所有名称
+    await Promise.all([
+      // 加载患者姓名
+      ...userIds.map(async (userId) => {
+        if (!patientNames.value[userId]) {
+          try {
+            const patient = await getPatientDetail(userId)
+            patientNames.value[userId] = patient.name || '未知用户'
+          } catch {
+            patientNames.value[userId] = '未知用户'
+          }
+        }
+      }),
+      // 加载套餐名称
+      ...packageIds.map(async (packageId) => {
+        if (!packageNames.value[packageId]) {
+          try {
+            const pkg = await getPackageDetail(packageId)
+            packageNames.value[packageId] = pkg.name || '未知套餐'
+          } catch {
+            packageNames.value[packageId] = '未知套餐'
+          }
+        }
+      })
+    ])
   } catch (err: any) {
     console.error('加载预约失败:', err.message)
   } finally {
@@ -70,7 +109,13 @@ async function handleComplete(appointment: Appointment) {
   completing.value = appointment.id
   try {
     await completeAppointment(appointment.id)
-    await loadAppointments()
+    // 自动刷新预约列表和报告列表
+    await Promise.all([
+      loadAppointments(),
+      loadReports()
+    ])
+    // 显示成功提示
+    ElMessage.success('标记完成成功')
   } catch (err: any) {
     alert('标记完成失败: ' + err.message)
   } finally {
@@ -159,18 +204,54 @@ async function submitGenerateReport() {
 async function openDetail(appointment: Appointment) {
   appointmentDetail.value = appointment
   patientDetail.value = null
+  detailPackageName.value = ''
+  detailInstitutionName.value = ''
   detailVisible.value = true
 
-  // 加载患者档案
-  patientLoading.value = true
-  try {
-    const patient = await getPatientDetail(appointment.userId)
-    patientDetail.value = patient
-  } catch (err: any) {
-    console.error('加载患者档案失败:', err.message)
-  } finally {
-    patientLoading.value = false
-  }
+  // 并行加载患者档案、套餐名称、机构名称
+  const loadTasks: Promise<any>[] = [
+    // 加载患者档案
+    (async () => {
+      patientLoading.value = true
+      try {
+        const patient = await getPatientDetail(appointment.userId)
+        patientDetail.value = patient
+      } catch (err: any) {
+        console.error('加载患者档案失败:', err.message)
+      } finally {
+        patientLoading.value = false
+      }
+    })(),
+    // 加载套餐名称
+    (async () => {
+      if (appointment.packageId) {
+        try {
+          const pkg = await getPackageDetail(appointment.packageId)
+          detailPackageName.value = pkg.name || '未知套餐'
+        } catch {
+          detailPackageName.value = '未知套餐'
+        }
+      }
+    })(),
+    // 加载机构名称（从后端返回的字段获取）
+    (async () => {
+      const instName = (appointment as any).institutionName
+      if (instName) {
+        detailInstitutionName.value = instName
+      } else if (appointment.institutionId) {
+        // 如果后端没返回，尝试通过ID查询
+        try {
+          const { getInstitutionDetail } = await import('@/api/institution')
+          const inst = await getInstitutionDetail(appointment.institutionId)
+          detailInstitutionName.value = inst.name || '未知机构'
+        } catch {
+          detailInstitutionName.value = '未知机构'
+        }
+      }
+    })()
+  ]
+
+  await Promise.all(loadTasks)
 }
 
 function getStatusType(status: number) {
@@ -283,7 +364,7 @@ onMounted(() => {
           <div class="appointment-info">
             <div class="info-row">
               <el-icon :size="14" color="#9ca3af"><User /></el-icon>
-              <span>患者ID: {{ item.userId }}</span>
+              <span>{{ patientNames[item.userId] || '加载中...' }}</span>
             </div>
             <div class="info-row">
               <el-icon :size="14" color="#9ca3af"><Calendar /></el-icon>
@@ -291,7 +372,11 @@ onMounted(() => {
             </div>
             <div class="info-row">
               <el-icon :size="14" color="#9ca3af"><Document /></el-icon>
-              <span>套餐ID: {{ item.packageId }}</span>
+              <span>{{ packageNames[item.packageId] || '加载中...' }}</span>
+            </div>
+            <div v-if="(item as any).institutionName" class="info-row">
+              <el-icon :size="14" color="#9ca3af"><FirstAidKit /></el-icon>
+              <span>{{ (item as any).institutionName }}</span>
             </div>
             <div v-if="item.remark" class="info-row remark">
               <span>备注: {{ item.remark }}</span>
@@ -386,20 +471,20 @@ onMounted(() => {
             <span class="detail-value">#{{ appointmentDetail.id }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">患者ID</span>
-            <span class="detail-value">{{ appointmentDetail.userId }}</span>
+            <span class="detail-label">患者</span>
+            <span class="detail-value">{{ patientDetail?.name || '-' }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">预约时间</span>
             <span class="detail-value">{{ formatDateTime(appointmentDetail.appointmentDate, appointmentDetail.timeSlot) }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">套餐ID</span>
-            <span class="detail-value">{{ appointmentDetail.packageId }}</span>
+            <span class="detail-label">体检套餐</span>
+            <span class="detail-value">{{ detailPackageName || packageNames[appointmentDetail.packageId] || '加载中...' }}</span>
           </div>
-          <div class="detail-row">
-            <span class="detail-label">机构ID</span>
-            <span class="detail-value">{{ appointmentDetail.institutionId || '-' }}</span>
+          <div v-if="detailInstitutionName || (appointmentDetail as any).institutionName" class="detail-row">
+            <span class="detail-label">体检机构</span>
+            <span class="detail-value">{{ detailInstitutionName || (appointmentDetail as any).institutionName }}</span>
           </div>
           <div class="detail-row">
             <span class="detail-label">状态</span>

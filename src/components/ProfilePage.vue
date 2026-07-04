@@ -21,7 +21,7 @@ const user = computed(() => ({
   avatar: userStore.user?.avatar || 'https://modao.cc/agent-py/media/generated_images/2026-06-03/14abbabc406b43ec8a82b7f7edd276b5.jpg',
   reports: reportsCount.value,
   appointments: appointmentsCount.value,
-  points: 128,
+  points: reportsCount.value * 10 + appointmentsCount.value * 1,
 }))
 
 const avatarInputRef = ref<HTMLInputElement>()

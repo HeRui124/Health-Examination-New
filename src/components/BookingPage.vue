@@ -35,18 +35,20 @@ const packageDetail = ref<(ExamPackage & { items?: ExamItem[] }) | null>(null)
 
 const calendarDays = ref<{ day: string; type: 'disabled' | 'normal' | 'selected'; date: string }[]>([])
 const currentMonthText = ref('')
+const calendarYear = ref(new Date().getFullYear())
+const calendarMonth = ref(new Date().getMonth())
 
 function initCalendar() {
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
+  const year = calendarYear.value
+  const month = calendarMonth.value
   const daysInMonth = new Date(year, month + 1, 0).getDate()
   const firstDayOfWeek = new Date(year, month, 1).getDay()
 
   currentMonthText.value = `${year}年${month + 1}月`
 
   // 今天的日期字符串，今天及之前的日期不可选
-  const todayStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
   const days: typeof calendarDays.value = []
   for (let i = 0; i < firstDayOfWeek; i++) {
@@ -226,6 +228,24 @@ function selectTimeSlot(slot: string) {
   bookingData.timeSlot = slot
 }
 
+function prevMonth() {
+  calendarMonth.value--
+  if (calendarMonth.value < 0) {
+    calendarMonth.value = 11
+    calendarYear.value--
+  }
+  initCalendar()
+}
+
+function nextMonth() {
+  calendarMonth.value++
+  if (calendarMonth.value > 11) {
+    calendarMonth.value = 0
+    calendarYear.value++
+  }
+  initCalendar()
+}
+
 async function submitBooking() {
   if (!bookingData.packageId || !bookingData.date) {
     alert('预约信息不完整')
@@ -381,8 +401,8 @@ function formatPrice(price: number) {
           <div class="calendar-header">
             <span class="calendar-month">{{ currentMonthText }}</span>
             <div class="calendar-nav">
-              <el-icon><ArrowLeft /></el-icon>
-              <el-icon><ArrowRight /></el-icon>
+              <el-icon @click="prevMonth"><ArrowLeft /></el-icon>
+              <el-icon @click="nextMonth"><ArrowRight /></el-icon>
             </div>
           </div>
           <div class="calendar-weekdays">
@@ -458,9 +478,6 @@ function formatPrice(price: number) {
             <span class="total-price">{{ summaryPrice }}</span>
           </div>
         </div>
-        <div class="agreement">
-          <el-checkbox>我已阅读并同意《体检预约服务协议》及《隐私政策》，确认身体状况符合体检要求。</el-checkbox>
-        </div>
       </div>
     </div>
 
@@ -491,6 +508,9 @@ function formatPrice(price: number) {
 
 <style scoped>
 .booking-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
   padding: 16px 20px 20px;
 }
 
@@ -576,7 +596,8 @@ function formatPrice(price: number) {
 }
 
 .step-content {
-  min-height: 400px;
+  flex: 1;
+  min-height: 0;
 }
 
 .step-panel {
@@ -829,15 +850,6 @@ function formatPrice(price: number) {
   font-size: 20px;
 }
 
-.agreement {
-  margin-top: 16px;
-}
-
-.agreement :deep(.el-checkbox__label) {
-  font-size: 11px;
-  color: #9ca3af;
-}
-
 .nav-buttons {
   display: flex;
   gap: 12px;
@@ -877,5 +889,13 @@ function formatPrice(price: number) {
 .nav-btn-primary {
   background: #0d9488;
   border-color: #0d9488;
+}
+
+:deep(.nav-btn-primary.is-disabled),
+:deep(.nav-btn-primary.is-disabled:hover),
+:deep(.nav-btn-primary.is-disabled:focus) {
+  background-color: #0d9489aa !important;
+  border-color: #0d9489aa !important;
+  color: #ffffff !important;
 }
 </style>

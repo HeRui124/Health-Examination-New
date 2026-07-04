@@ -2,6 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { Document, Clock, FirstAidKit, Warning, Edit } from '@element-plus/icons-vue'
 import { getReportList, getReportDetail, getReportItemsAll, updateReport, updateReportItem } from '@/api/report'
+import { getAppointmentList } from '@/api/appointment'
+import { getPackageDetail } from '@/api/package'
+import { getPatientDetail } from '@/api/patient'
 import type { Report, ReportItem } from '@/types'
 
 const reports = ref<Report[]>([])
@@ -9,6 +12,11 @@ const loading = ref(false)
 const page = ref(1)
 const size = ref(10)
 const total = ref(0)
+
+// 存储患者姓名映射 (userId -> name)
+const patientNames = ref<Record<number, string>>({})
+// 存储套餐名称映射 (packageId -> name)
+const packageNames = ref<Record<number, string>>({})
 
 // 报告详情弹窗
 const detailVisible = ref(false)
@@ -28,6 +36,59 @@ async function loadReports() {
     const res = await getReportList(page.value, size.value)
     reports.value = res.records
     total.value = res.total
+    
+    // 收集所有需要加载的ID
+    const userIds = [...new Set(res.records.map(r => r.userId))]
+    const appointmentIds = [...new Set(res.records.map(r => r.appointmentId).filter((id): id is number => !!id))]
+    
+    // 先加载预约信息以获取套餐ID和机构名称
+    let packageIds: number[] = []
+    const appointmentInfoMap = new Map<number, { packageName?: string; institutionName?: string }>()
+    
+    if (appointmentIds.length > 0) {
+      try {
+        const appointmentsRes = await getAppointmentList(1, 100)
+        appointmentsRes.records.forEach(app => {
+          // 保存预约信息用于后续显示
+          appointmentInfoMap.set(app.id, {
+            packageName: (app as any).packageName,
+            institutionName: (app as any).institutionName
+          })
+          // 从预约中获取套餐ID
+          if (app.packageId) packageIds.push(app.packageId)
+        })
+        
+        packageIds = [...new Set(packageIds)]
+      } catch (err) {
+        console.error('加载预约信息失败:', err)
+      }
+    }
+    
+    // 并行加载所有名称
+    await Promise.all([
+      // 加载患者姓名
+      ...userIds.map(async (userId) => {
+        if (!patientNames.value[userId]) {
+          try {
+            const patient = await getPatientDetail(userId)
+            patientNames.value[userId] = patient.name || '未知用户'
+          } catch {
+            patientNames.value[userId] = '未知用户'
+          }
+        }
+      }),
+      // 加载套餐名称
+      ...packageIds.map(async (packageId) => {
+        if (!packageNames.value[packageId]) {
+          try {
+            const pkg = await getPackageDetail(packageId)
+            packageNames.value[packageId] = pkg.name || '未知套餐'
+          } catch {
+            packageNames.value[packageId] = '未知套餐'
+          }
+        }
+      })
+    ])
   } catch (err: any) {
     console.error('加载报告失败:', err.message)
   } finally {
@@ -196,14 +257,10 @@ onMounted(() => {
 
           <div class="report-info">
             <div class="info-row">
-              <span class="info-label">患者ID</span>
-              <span class="info-value">{{ report.userId }}</span>
+              <span class="info-label">患者</span>
+              <span class="info-value">{{ patientNames[report.userId] || '加载中...' }}</span>
             </div>
-            <div class="info-row">
-              <span class="info-label">关联预约</span>
-              <span class="info-value">#{{ report.appointmentId }}</span>
-            </div>
-            <div class="info-row">
+            <div v-if="report.appointmentId" class="info-row">
               <span class="info-label">生成时间</span>
               <span class="info-value">{{ formatDate(report.generateTime) }}</span>
             </div>

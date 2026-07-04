@@ -35,7 +35,9 @@ async function loadReports() {
   try {
     const res = await getReportList(page.value, size.value)
     reports.value = res.records
-    total.value = res.total
+    // 由于后端分页插件未正确配置，total 始终返回 0
+    // 暂时使用 records.length 作为显示（仅第一页准确）
+    total.value = res.total > 0 ? res.total : res.records.length
     
     // 收集所有需要加载的ID
     const userIds = [...new Set(res.records.map(r => r.userId))]

@@ -1,9 +1,14 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { UserFilled, FirstAidKit, DocumentChecked, SwitchButton, OfficeBuilding, Medal, Star, Document } from '@element-plus/icons-vue'
+import { computed, ref, onMounted, inject } from 'vue'
+import { UserFilled, FirstAidKit, DocumentChecked, SwitchButton, OfficeBuilding, Medal, Star, Document, Loading } from '@element-plus/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { getDoctorDetail } from '@/api/doctor'
+import { updateAvatar } from '@/api/auth'
+import { uploadFile } from '@/api/file'
 import type { Doctor } from '@/types'
+
+// 从父组件注入 switchTab 方法
+const switchTab = inject<(tab: string) => void>('switchTab')
 
 const userStore = useUserStore()
 
@@ -37,6 +42,49 @@ const user = computed(() => ({
   role: userStore.user?.role || 'DOCTOR',
   avatar: userStore.user?.avatar || 'https://modao.cc/agent-py/media/generated_images/2026-06-03/14abbabc406b43ec8a82b7f7edd276b5.jpg',
 }))
+
+// 头像上传相关
+const avatarInputRef = ref<HTMLInputElement>()
+const avatarUploading = ref(false)
+
+function triggerAvatarUpload() {
+  avatarInputRef.value?.click()
+}
+
+async function handleAvatarChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // 简单校验：只允许图片
+  if (!file.type.startsWith('image/')) {
+    alert('请选择图片文件')
+    target.value = ''
+    return
+  }
+
+  avatarUploading.value = true
+  try {
+    const uploadRes = await uploadFile(file)
+    await updateAvatar(uploadRes.fileUrl)
+    userStore.updateUserAvatar(uploadRes.fileUrl)
+    alert('头像更新成功')
+  } catch (err: any) {
+    alert('头像上传失败: ' + err.message)
+  } finally {
+    avatarUploading.value = false
+    target.value = ''
+  }
+}
+
+// 快捷操作跳转
+function goToAppointments() {
+  switchTab?.('workbench')
+}
+
+function goToReports() {
+  switchTab?.('reports')
+}
 </script>
 
 <template>
@@ -44,7 +92,19 @@ const user = computed(() => ({
     <!-- User Info Card -->
     <div class="user-card">
       <div class="user-header">
-        <el-avatar :size="64" :src="user.avatar" class="user-avatar" />
+        <div class="avatar-wrapper" @click="triggerAvatarUpload">
+          <el-avatar :size="64" :src="user.avatar" class="user-avatar" />
+          <div v-if="avatarUploading" class="avatar-mask">
+            <el-icon class="is-loading" :size="20"><Loading /></el-icon>
+          </div>
+        </div>
+        <input
+          ref="avatarInputRef"
+          type="file"
+          accept="image/*"
+          style="display: none"
+          @change="handleAvatarChange"
+        />
         <div class="user-info">
           <h2 class="user-name">{{ user.name }}</h2>
           <p class="user-role">体检医生</p>
@@ -54,13 +114,13 @@ const user = computed(() => ({
       </div>
 
       <div class="quick-actions">
-        <div class="action-item">
+        <div class="action-item" @click="goToAppointments">
           <div class="action-icon" style="background: #f0fdfa; color: #0d9488;">
             <el-icon :size="20"><FirstAidKit /></el-icon>
           </div>
           <span class="action-label">预约管理</span>
         </div>
-        <div class="action-item">
+        <div class="action-item" @click="goToReports">
           <div class="action-icon" style="background: #eff6ff; color: #3b82f6;">
             <el-icon :size="20"><DocumentChecked /></el-icon>
           </div>
@@ -161,8 +221,33 @@ const user = computed(() => ({
   gap: 16px;
 }
 
+.avatar-wrapper {
+  position: relative;
+  cursor: pointer;
+}
+
 .user-avatar {
   border: 4px solid #f0fdfa;
+  transition: all 0.3s;
+}
+
+.avatar-wrapper:hover .user-avatar {
+  opacity: 0.8;
+  transform: scale(1.05);
+}
+
+.avatar-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
 }
 
 .user-info {
@@ -220,6 +305,8 @@ const user = computed(() => ({
 
 .action-item:hover {
   background: #f3f4f6;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 .action-icon {

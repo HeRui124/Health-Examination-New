@@ -23,6 +23,8 @@ const total = ref(0)
 const patientNames = ref<Record<number, string>>({})
 // 存储套餐名称映射 (packageId -> name)
 const packageNames = ref<Record<number, string>>({})
+// 存储机构名称映射 (institutionId -> name)
+const institutionNamesCache = ref<Record<number, string>>({})
 
 // 报告生成弹窗
 const generateDialogVisible = ref(false)
@@ -56,6 +58,11 @@ async function loadAppointments() {
     // 收集所有需要加载的ID
     const userIds = [...new Set(res.records.map(a => a.userId))]
     const packageIds = [...new Set(res.records.map(a => a.packageId).filter((id): id is number => !!id))]
+    const institutionIds = [...new Set(
+      res.records
+        .map(a => (a as any).institutionId || a.institutionId)
+        .filter((id): id is number => !!id)
+    )]
     
     // 并行加载所有名称
     await Promise.all([
@@ -76,8 +83,28 @@ async function loadAppointments() {
           try {
             const pkg = await getPackageDetail(packageId)
             packageNames.value[packageId] = pkg.name || '未知套餐'
+            // 如果套餐有 institutionId，也缓存起来
+            if ((pkg as any).institutionId && !institutionNamesCache.value[(pkg as any).institutionId]) {
+              try {
+                const { getInstitutionDetail } = await import('@/api/institution')
+                const inst = await getInstitutionDetail((pkg as any).institutionId)
+                institutionNamesCache.value[(pkg as any).institutionId] = inst.name || '未知机构'
+              } catch {}
+            }
           } catch {
             packageNames.value[packageId] = '未知套餐'
+          }
+        }
+      }),
+      // 加载机构名称
+      ...institutionIds.map(async (institutionId) => {
+        if (!institutionNamesCache.value[institutionId]) {
+          try {
+            const { getInstitutionDetail } = await import('@/api/institution')
+            const inst = await getInstitutionDetail(institutionId)
+            institutionNamesCache.value[institutionId] = inst.name || '未知机构'
+          } catch {
+            institutionNamesCache.value[institutionId] = '未知机构'
           }
         }
       })
@@ -233,20 +260,28 @@ async function openDetail(appointment: Appointment) {
         }
       }
     })(),
-    // 加载机构名称（从后端返回的字段获取）
+    // 加载机构名称（从缓存或后端返回的字段获取）
     (async () => {
       const instName = (appointment as any).institutionName
       if (instName) {
         detailInstitutionName.value = instName
-      } else if (appointment.institutionId) {
-        // 如果后端没返回，尝试通过ID查询
+      } else if (appointment.institutionId && institutionNamesCache.value[appointment.institutionId]) {
+        // 使用缓存的机构名称
+        detailInstitutionName.value = institutionNamesCache.value[appointment.institutionId]
+      } else if (appointment.packageId && packageNames.value[appointment.packageId]) {
+        // 如果套餐已加载，尝试从套餐获取机构信息
         try {
-          const { getInstitutionDetail } = await import('@/api/institution')
-          const inst = await getInstitutionDetail(appointment.institutionId)
-          detailInstitutionName.value = inst.name || '未知机构'
+          const pkg = await getPackageDetail(appointment.packageId)
+          if ((pkg as any).institutionId && institutionNamesCache.value[(pkg as any).institutionId]) {
+            detailInstitutionName.value = institutionNamesCache.value[(pkg as any).institutionId]
+          } else {
+            detailInstitutionName.value = '未知机构'
+          }
         } catch {
           detailInstitutionName.value = '未知机构'
         }
+      } else {
+        detailInstitutionName.value = '未知机构'
       }
     })()
   ]

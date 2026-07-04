@@ -23,9 +23,10 @@ export function register(data: {
 
 // ==================== 用户管理（管理员） ====================
 
-export function getUserList(page = 1, size = 10, keyword = '') {
+export function getUserList(page = 1, size = 10, keyword = '', role?: string) {
   let url = `/api/auth/users?page=${page}&size=${size}`
   if (keyword) url += `&keyword=${encodeURIComponent(keyword)}`
+  if (role && role !== 'ALL') url += `&role=${role}`
   return request.get<ApiResponse<PageData<User>>>(url)
     .then((res: AxiosResponse<ApiResponse<PageData<User>>>) => res.data.data)
 }

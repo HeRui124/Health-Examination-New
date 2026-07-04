@@ -80,6 +80,7 @@ function handleBookingSubmit(data: any) {
 }
 
 provide('showToast', showToast)
+provide('switchTab', switchTab)
 </script>
 
 <template>
@@ -214,7 +215,7 @@ provide('showToast', showToast)
           {{ toastMessage }}
         </div>
       </transition>
-      <AIChatWidget v-if="isLoggedIn && !isAdmin && !isDoctor" />
+      <AIChatWidget v-if="isLoggedIn && !isAdmin" />
     </div>
   </div>
 </template>

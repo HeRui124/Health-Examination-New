@@ -17,6 +17,16 @@ const size = ref(10)
 const total = ref(0)
 const searchKeyword = ref('')
 
+// 用户类型筛选
+const activeUserType = ref<'ALL' | 'PATIENT' | 'DOCTOR' | 'ADMIN'>('ALL')
+
+// 切换用户类型
+function handleUserTypeChange(type: 'ALL' | 'PATIENT' | 'DOCTOR' | 'ADMIN') {
+  activeUserType.value = type
+  page.value = 1  // 重置到第一页
+  loadUsers()
+}
+
 const dialogVisible = ref(false)
 const dialogMode = ref<'add' | 'edit'>('edit')
 const form = ref<Partial<User>>({})
@@ -37,7 +47,7 @@ const profileLoading = ref(false)
 async function loadUsers() {
   loading.value = true
   try {
-    const res = await getUserList(page.value, size.value, searchKeyword.value)
+    const res = await getUserList(page.value, size.value, searchKeyword.value, activeUserType.value)
     users.value = res.records
     total.value = res.total
   } catch (err: any) {
@@ -167,6 +177,38 @@ onMounted(loadUsers)
         <el-button type="primary" size="small" :icon="Plus" circle @click="openAddDialog" />
         <el-button size="small" :icon="RefreshRight" circle @click="loadUsers" />
         <el-button type="danger" size="small" :icon="SwitchButton" circle @click="handleLogout" />
+      </div>
+    </div>
+
+    <!-- 用户类型筛选 Tab -->
+    <div class="user-type-tabs">
+      <div
+        class="tab-item"
+        :class="{ active: activeUserType === 'ALL' }"
+        @click="handleUserTypeChange('ALL')"
+      >
+        <span class="tab-label">全部用户</span>
+      </div>
+      <div
+        class="tab-item"
+        :class="{ active: activeUserType === 'PATIENT' }"
+        @click="handleUserTypeChange('PATIENT')"
+      >
+        <span class="tab-label">患者</span>
+      </div>
+      <div
+        class="tab-item"
+        :class="{ active: activeUserType === 'DOCTOR' }"
+        @click="handleUserTypeChange('DOCTOR')"
+      >
+        <span class="tab-label">医生</span>
+      </div>
+      <div
+        class="tab-item"
+        :class="{ active: activeUserType === 'ADMIN' }"
+        @click="handleUserTypeChange('ADMIN')"
+      >
+        <span class="tab-label">管理员</span>
       </div>
     </div>
 
@@ -324,6 +366,52 @@ onMounted(loadUsers)
   display: flex;
   gap: 8px;
   align-items: center;
+}
+
+/* 用户类型筛选 Tab */
+.user-type-tabs {
+  display: flex;
+  background: white;
+  border-bottom: 1px solid #f3f4f6;
+  padding: 0 12px;
+  flex-shrink: 0;
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 12px 0;
+  cursor: pointer;
+  position: relative;
+  transition: all 0.3s;
+}
+
+.tab-label {
+  font-size: 14px;
+  color: #6b7280;
+  font-weight: 500;
+  transition: all 0.3s;
+}
+
+.tab-item:hover .tab-label {
+  color: #0d9488;
+}
+
+.tab-item.active .tab-label {
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 40px;
+  height: 3px;
+  background: #0d9488;
+  border-radius: 2px;
 }
 
 .admin-content {

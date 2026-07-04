@@ -443,7 +443,6 @@ function formatPrice(price: number) {
         </div>
         <div class="selected-date-info">
           <p class="selected-date-text">已选择: <strong>{{ selectedDateText }} {{ bookingData.timeSlot }}</strong></p>
-          <p class="selected-date-note">当日可预约名额剩余: 12人</p>
         </div>
       </div>
 
@@ -472,6 +471,17 @@ function formatPrice(price: number) {
             <div class="item-tags">
               <el-tag v-for="item in packageDetail.items" :key="item.id" size="small" type="info">{{ item.name }}</el-tag>
             </div>
+          </div>
+          <div class="summary-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+            <span class="summary-label">备注信息</span>
+            <el-input
+              v-model="bookingData.remark"
+              type="textarea"
+              :rows="3"
+              placeholder="请输入备注信息（选填），如特殊需求、注意事项等"
+              maxlength="200"
+              show-word-limit
+            />
           </div>
           <div class="summary-total">
             <span>总计金额</span>

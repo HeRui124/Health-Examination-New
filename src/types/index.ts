@@ -114,6 +114,12 @@ export interface InstitutionPackage {
   packageId: number
 }
 
+export interface ApptTypeInstitution {
+  id: number
+  apptType: string
+  institutionId: number
+}
+
 // ==================== 检查项目相关 ====================
 
 export interface ExamItem {

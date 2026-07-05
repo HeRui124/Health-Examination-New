@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElCheckbox } from 'element-plus'
+import { ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElCheckbox, ElSelect, ElOption } from 'element-plus'
 import { Plus, RefreshRight, SwitchButton } from '@element-plus/icons-vue'
-import type { Institution, InstitutionPackage, ExamPackage } from '@/types'
+import type { Institution, InstitutionPackage, ExamPackage, ApptTypeInstitution, DictItem } from '@/types'
 import { useUserStore } from '@/stores/user'
 import { getInstitutionList, getInstitutionDetail, createInstitution, updateInstitution, deleteInstitution } from '@/api/institution'
 import { getInstitutionPackages, createInstitutionPackage, deleteInstitutionPackage } from '@/api/institution-package'
+import { getApptTypeInstitutions, createApptTypeInstitution, deleteApptTypeInstitution } from '@/api/appt-type-institution'
 import { getPackageList } from '@/api/package'
+import { getDictItemsByType } from '@/api/dict'
 
 const userStore = useUserStore()
 
@@ -29,6 +31,12 @@ const allPackages = ref<ExamPackage[]>([])
 const packageSelectVisible = ref(false)
 const selectedPackageIds = ref<number[]>([])
 const linkLoading = ref(false)
+
+// 关联预约类型管理
+const apptTypeInstitutions = ref<ApptTypeInstitution[]>([])
+const allApptTypes = ref<DictItem[]>([])
+const apptTypeSelectVisible = ref(false)
+const selectedApptType = ref<string>('')
 
 async function loadInstitutions() {
   loading.value = true
@@ -58,7 +66,10 @@ async function openEditDialog(id: number) {
     const detail = await getInstitutionDetail(id)
     form.value = { ...detail }
     dialogVisible.value = true
-    await loadInstitutionPackages(id)
+    await Promise.all([
+      loadInstitutionPackages(id),
+      loadApptTypeInstitutions(id)
+    ])
   } catch (err: any) {
     alert('获取机构详情失败: ' + err.message)
   }
@@ -77,6 +88,24 @@ async function loadInstitutionPackages(institutionId: number) {
     console.warn('加载关联套餐失败:', err.message)
     institutionPackages.value = []
     allPackages.value = []
+  } finally {
+    linkLoading.value = false
+  }
+}
+
+async function loadApptTypeInstitutions(institutionId: number) {
+  linkLoading.value = true
+  try {
+    const [links, types] = await Promise.all([
+      getApptTypeInstitutions(institutionId),
+      getDictItemsByType(4), // 预约类型字典ID为4
+    ])
+    apptTypeInstitutions.value = links
+    allApptTypes.value = types.records
+  } catch (err: any) {
+    console.warn('加载关联预约类型失败:', err.message)
+    apptTypeInstitutions.value = []
+    allApptTypes.value = []
   } finally {
     linkLoading.value = false
   }
@@ -115,6 +144,41 @@ async function handleSavePackageLinks() {
     await loadInstitutionPackages(currentInstitutionId.value)
   } catch (err: any) {
     alert('更新关联套餐失败: ' + err.message)
+  } finally {
+    linkLoading.value = false
+  }
+}
+
+function openApptTypeSelectDialog() {
+  selectedApptType.value = ''
+  apptTypeSelectVisible.value = true
+}
+
+async function handleAddApptType() {
+  if (!currentInstitutionId.value || !selectedApptType.value) return
+  linkLoading.value = true
+  try {
+    await createApptTypeInstitution({ 
+      institutionId: currentInstitutionId.value, 
+      apptType: selectedApptType.value 
+    })
+    apptTypeSelectVisible.value = false
+    await loadApptTypeInstitutions(currentInstitutionId.value)
+  } catch (err: any) {
+    alert('添加预约类型失败: ' + err.message)
+  } finally {
+    linkLoading.value = false
+  }
+}
+
+async function handleRemoveApptType(apptTypeId: number) {
+  if (!confirm('确定要移除该预约类型吗？')) return
+  linkLoading.value = true
+  try {
+    await deleteApptTypeInstitution(apptTypeId)
+    await loadApptTypeInstitutions(currentInstitutionId.value)
+  } catch (err: any) {
+    alert('移除预约类型失败: ' + err.message)
   } finally {
     linkLoading.value = false
   }
@@ -258,6 +322,31 @@ onMounted(loadInstitutions)
         </div>
       </div>
 
+      <!-- 关联预约类型（仅编辑模式） -->
+      <div v-if="dialogMode === 'edit'" class="items-section">
+        <div class="items-header">
+          <h3 class="items-title">关联预约类型</h3>
+          <el-button type="primary" size="small" :icon="Plus" circle @click="openApptTypeSelectDialog" />
+        </div>
+        <div v-if="linkLoading" class="loading-text" style="padding: 12px 0;">加载中...</div>
+        <div v-else-if="apptTypeInstitutions.length === 0" class="empty-text" style="padding: 12px 0;">暂未关联预约类型</div>
+        <div v-else class="linked-appt-type-list">
+          <div v-for="ati in apptTypeInstitutions" :key="ati.id" class="linked-appt-type-item">
+            <el-tag size="small" type="success">
+              {{ allApptTypes.find(t => t.value === ati.apptType)?.label || ati.apptType }}
+            </el-tag>
+            <el-button 
+              type="danger" 
+              size="small" 
+              text 
+              @click="handleRemoveApptType(ati.id)"
+            >
+              移除
+            </el-button>
+          </div>
+        </div>
+      </div>
+
       <template #footer>
         <el-button size="small" @click="dialogVisible = false">取消</el-button>
         <el-button type="primary" size="small" :loading="submitting" @click="handleSubmit">确定</el-button>
@@ -277,6 +366,29 @@ onMounted(loadInstitutions)
       <template #footer>
         <el-button size="small" @click="packageSelectVisible = false">取消</el-button>
         <el-button type="primary" size="small" :loading="linkLoading" @click="handleSavePackageLinks">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- 选择关联预约类型弹窗 -->
+    <el-dialog v-model="apptTypeSelectVisible" title="添加预约类型" width="90%">
+      <div v-if="allApptTypes.length === 0" class="empty-text">暂无可用预约类型</div>
+      <div v-else class="appt-type-select-form">
+        <el-form label-width="100px">
+          <el-form-item label="预约类型">
+            <el-select v-model="selectedApptType" placeholder="请选择预约类型" style="width: 100%;">
+              <el-option 
+                v-for="t in allApptTypes.filter(t => !apptTypeInstitutions.some(ati => ati.apptType === t.value))" 
+                :key="t.value" 
+                :label="t.label" 
+                :value="t.value"
+              />
+            </el-select>
+          </el-form-item>
+        </el-form>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="apptTypeSelectVisible = false">取消</el-button>
+        <el-button type="primary" size="small" :loading="linkLoading" @click="handleAddApptType">确定</el-button>
       </template>
     </el-dialog>
   </div>
@@ -405,5 +517,24 @@ onMounted(loadInstitutions)
   padding: 8px;
   background: #f9fafb;
   border-radius: 8px;
+}
+
+.linked-appt-type-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.linked-appt-type-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px;
+  background: #f0fdf4;
+  border-radius: 8px;
+}
+
+.appt-type-select-form {
+  padding: 16px 0;
 }
 </style>

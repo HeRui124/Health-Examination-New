@@ -13,7 +13,15 @@ export interface PageData<T> {
   records: T[]
 }
 
-// ==================== 字典项相关 ====================
+// ==================== 字典相关 ====================
+
+export interface DictType {
+  id: number
+  dictName: string
+  dictType: string
+  status: number
+  remark?: string
+}
 
 export interface DictItem {
   id: number
@@ -22,6 +30,7 @@ export interface DictItem {
   value: string
   sortOrder: number
   status: number
+  remark?: string
 }
 
 // ==================== 用户相关 ====================

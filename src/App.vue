@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, provide, computed, watch, onMounted } from 'vue'
-import { HomeFilled, DocumentChecked, UserFilled, Iphone, ChatDotRound, Lightning, FirstAidKit, Document, Notebook, User, Box, OfficeBuilding } from '@element-plus/icons-vue'
+import { HomeFilled, DocumentChecked, UserFilled, Iphone, ChatDotRound, Lightning, FirstAidKit, Notebook, User, Box, OfficeBuilding } from '@element-plus/icons-vue'
 import { useUserStore } from './stores/user'
 import HomePage from './components/HomePage.vue'
 import BookingPage from './components/BookingPage.vue'
@@ -12,11 +12,12 @@ import DoctorProfilePage from './components/DoctorProfilePage.vue'
 import AdminUsersPage from './components/AdminUsersPage.vue'
 import AdminPackagesPage from './components/AdminPackagesPage.vue'
 import AdminInstitutionsPage from './components/AdminInstitutionsPage.vue'
+import AdminDictPage from './components/AdminDictPage.vue'
 import AIChatWidget from './components/AIChatWidget.vue'
 
 type PatientTab = 'home' | 'booking' | 'profile'
 type DoctorTab = 'workbench' | 'reports' | 'profile'
-type AdminTab = 'users' | 'packages' | 'institutions'
+type AdminTab = 'users' | 'packages' | 'institutions' | 'dicts'
 type TabType = PatientTab | DoctorTab | AdminTab
 
 const userStore = useUserStore()
@@ -105,6 +106,7 @@ provide('switchTab', switchTab)
             <AdminUsersPage v-show="currentTab === 'users'" />
             <AdminPackagesPage v-show="currentTab === 'packages'" />
             <AdminInstitutionsPage v-show="currentTab === 'institutions'" />
+            <AdminDictPage v-show="currentTab === 'dicts'" />
           </template>
           <!-- 患者页面 -->
           <template v-else-if="!isDoctor">
@@ -134,7 +136,7 @@ provide('switchTab', switchTab)
             @click="switchTab('users')"
           >
             <el-icon :size="22"><User /></el-icon>
-            <span class="tab-label">用户</span>
+            <span class="tab-label">用户管理</span>
           </div>
           <div
             class="tab-item"
@@ -142,7 +144,7 @@ provide('switchTab', switchTab)
             @click="switchTab('packages')"
           >
             <el-icon :size="22"><Box /></el-icon>
-            <span class="tab-label">套餐</span>
+            <span class="tab-label">套餐管理</span>
           </div>
           <div
             class="tab-item"
@@ -150,7 +152,15 @@ provide('switchTab', switchTab)
             @click="switchTab('institutions')"
           >
             <el-icon :size="22"><OfficeBuilding /></el-icon>
-            <span class="tab-label">机构</span>
+            <span class="tab-label">机构管理</span>
+          </div>
+          <div
+            class="tab-item"
+            :class="{ active: currentTab === 'dicts' }"
+            @click="switchTab('dicts')"
+          >
+            <el-icon :size="22"><Notebook /></el-icon>
+            <span class="tab-label">字典管理</span>
           </div>
         </template>
         <!-- 患者导航 -->
